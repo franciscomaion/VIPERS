@@ -4,6 +4,10 @@ from cosmo_funcs import comoving
 import h5py
 import scipy.interpolate
 
+# We have to begin with the data, since we must 
+# determine what is the angle by which we should
+# rotate the mocks.
+
 # Cosmological Parameters
 Omegak=0.0
 w0= -0.999
@@ -103,21 +107,16 @@ n_x = len(x_edges)
 n_y = len(y_edges)
 n_z = len(z_edges)
 
-grid_cat = np.histogramdd(cat_temp.T, bin_edges, weights=1/(data_w1_z1['tsr']*data_w1_z1['ssr']))[0]
+del cat, cat_temp
+# Now let's load the mocks to build
+# the selection function
 
-# Save grid in hdf5 format
-out = h5py.File('../../cats/data_w1_z1_L0.hdf5','w')
-out.create_dataset('data_w1_z1_L0',data=grid_cat)
-out.close()
+alpha_mocks = np.asarray([])
+theta_mocks = np.asarray([])
+z_mocks = np.asarray([])
+M_I_mocks = np.asarray([])
 
-print("Deleting arrays")
-del data_w1, cat_temp, cat
-
-#DONE WITH THE DATA. LET'S DO THE MOCKS
-print("Let's do the mocks\n")
-
-n_mocks=153
-for i in range(n_mocks):
+for i in range(153):
 	print("-------------------------------------------------------------------")
 	print("Importing mock number ", i, "\n")
 	mock_temp = np.loadtxt("../../../ANTONIO_MOCKS/W1mocks/mock_"+str(i+1)+".txt",skiprows=1)
@@ -142,29 +141,30 @@ for i in range(n_mocks):
 
 	alpha_temp = mock_temp[:,1]*np.pi/180
 	theta_temp = (90 - mock_temp[:,2])*np.pi/180
-	z_temp = mock_temp[:,3]
 
-	cat = np.zeros((3,len(mock_temp)))
-	print("Turning (RA,DEC,z) to (x,y,z)\n")
-	cat[0] = comov(z_temp)*np.sin(theta_temp)*np.cos(alpha_temp)
-	cat[1] = comov(z_temp)*np.sin(theta_temp)*np.sin(alpha_temp)
-	cat[2] = comov(z_temp)*np.cos(theta_temp)
+	alpha_mocks = np.append(alpha_mocks,alpha_temp)
+	theta_mocks = np.append(theta_mocks,theta_temp)
+	z_mocks = np.append(z_mocks,mock_temp[:,3])
+	M_I_mocks = np.append(M_I_mocks,mock_temp[:,5])
 
-	print("Rotating data catalogue\n")
-	cat_temp = np.einsum('ij,jk',R_z,cat)
-	cat_temp = np.einsum('ij,jk',R_y,cat_temp)
+cat = np.zeros((3,len(alpha_mocks)))
+print("Turning (RA,DEC,z) to (x,y,z)")
+cat[0] = comov(z_mocks)*np.sin(theta_mocks)*np.cos(alpha_mocks)
+cat[1] = comov(z_mocks)*np.sin(theta_mocks)*np.sin(alpha_mocks)
+cat[2] = comov(z_mocks)*np.cos(theta_mocks)
 
-	# We do not calculate new n_i_orig, since we'll use the data ones. This will make all the catalogues consistent
-	# In a similar way, we'll use the same xmin and xmax. This guarantees that same bins are precisely
-	# the same regions of space.
+print("Rotating data catalogue\n")
+cat_temp = np.einsum('ij,jk',R_z,cat)
+cat_temp = np.einsum('ij,jk',R_y,cat_temp)
 
-	# Reincorporate magnitude to cat_temp
-	cat_temp = np.vstack((cat_temp,mock_temp[:,5]))
+# Reincorporate magnitude to cat_temp
+cat_temp = np.vstack((cat_temp,M_I_mocks))
 
-	grid_cat = np.histogramdd(cat_temp.T, bin_edges )[0]
+print("Binning the full amount of mock galaxies")
+grid_cat = np.histogramdd(cat_temp.T, bin_edges )[0]/153
 
-	out_name = "Box_"+str(i).zfill(3)+"_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)
-
-	out = h5py.File("../../cats/"+out_name+".hdf5",'w')
-	out.create_dataset(out_name,data=grid_cat)
-	out.close()
+print("Saving them to selfunc_22_95_120.hdf5")
+out_name = "selfunc_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)
+out = h5py.File("../../cats/"+out_name+".hdf5",'w')
+out.create_dataset(out_name,data=grid_cat)
+out.close()
