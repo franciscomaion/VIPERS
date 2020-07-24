@@ -11,7 +11,7 @@ w1= 0.0
 Omegab=0.048206
 Omegac=0.2589
 Omegam = Omegab+Omegac
-H0=67.7
+H0=70.0
 n_SA=0.96
 ln10e10ASA=3.085
 z_re=9.9999
@@ -22,8 +22,8 @@ with fits.open('../../W1_combined.fits') as hdul_w1:
     data_w1 = hdul_w1[1].data
 
 print("Making appropriate cuts\n")
-print("z_flag>=2, tsr*ssr!=0, z in first slice \n")
-data_w1_z1 = data_w1[np.where( (data_w1['zflg']>=2) & (data_w1['tsr']*data_w1['ssr']!=0) & (data_w1['zspec_1']>0.55) & (data_w1['zspec_1']<0.7)  )]
+print("z_flag>=2, tsr*ssr>0, z in first slice \n")
+data_w1_z1 = data_w1[np.where( (data_w1['zflg']>=2) & (data_w1['tsr']*data_w1['ssr']>0) & (data_w1['zspec_1']>=0.55) & (data_w1['zspec_1']<=0.7)  )]
 
 # Interpolate distances to speed up calculation
 comov = np.vectorize(comoving)
@@ -84,8 +84,8 @@ n_x_orig = xmin/cell_size
 n_y_orig = ymin/cell_size
 n_z_orig = zmin/cell_size
 
-# Reincorporate magnitude to cat_temp
-cat_temp = np.vstack((cat_temp,data_w1_z1['M_I']))
+# Reincorporate B-band magnitude to cat_temp
+cat_temp = np.vstack((cat_temp,data_w1_z1['M_B']))
 
 # Bin the objects in spatial grid
 xmax = cat_temp[0,:].max()
@@ -95,19 +95,20 @@ zmax = cat_temp[2,:].max()
 x_edges = np.arange(xmin,xmax+cell_size,cell_size)
 y_edges = np.arange(ymin,ymax+cell_size,cell_size)
 z_edges = np.arange(zmin,zmax+cell_size,cell_size)
-M_I_edges = np.asarray([data_w1_z1['M_I'].min(),-20.5,data_w1_z1['M_I'].max()])
+M_B_edges = np.asarray([data_w1_z1['M_B'].min(),-20.0,data_w1_z1['M_B'].max()])
 
-bin_edges = np.asarray([x_edges,y_edges,z_edges,M_I_edges])
+bin_edges = np.asarray([x_edges,y_edges,z_edges,M_B_edges])
 
-n_x = len(x_edges)
-n_y = len(y_edges)
-n_z = len(z_edges)
+n_x = len(x_edges)-1
+n_y = len(y_edges)-1
+n_z = len(z_edges)-1
 
 grid_cat = np.histogramdd(cat_temp.T, bin_edges, weights=1/(data_w1_z1['tsr']*data_w1_z1['ssr']))[0]
+grid_cat = np.transpose(grid_cat,(3,0,1,2))
 
 # Save grid in hdf5 format
-out = h5py.File('../../cats/data_w1_z1_L0.hdf5','w')
-out.create_dataset('data_w1_z1_L0',data=grid_cat)
+out = h5py.File('../../cats/z1/VIPERS_w1_z1_L0_DATA.hdf5','w')
+out.create_dataset('VIPERS_w1_z1_L0_DATA',data=grid_cat)
 out.close()
 
 print("Deleting arrays")
@@ -159,12 +160,13 @@ for i in range(n_mocks):
 	# the same regions of space.
 
 	# Reincorporate magnitude to cat_temp
-	cat_temp = np.vstack((cat_temp,mock_temp[:,5]))
+	cat_temp = np.vstack((cat_temp,mock_temp[:,4]+5*np.log10(0.7)))
 
 	grid_cat = np.histogramdd(cat_temp.T, bin_edges )[0]
+	grid_cat = np.transpose(grid_cat,(3,0,1,2))
 
-	out_name = "Box_"+str(i).zfill(3)+"_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)
+	out_name = "Box_"+str(i).zfill(3)+"_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)+"_L0"
 
-	out = h5py.File("../../cats/"+out_name+".hdf5",'w')
+	out = h5py.File("../../cats/z1/"+out_name+".hdf5",'w')
 	out.create_dataset(out_name,data=grid_cat)
 	out.close()

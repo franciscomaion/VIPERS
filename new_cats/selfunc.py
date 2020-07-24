@@ -15,7 +15,7 @@ w1= 0.0
 Omegab=0.048206
 Omegac=0.2589
 Omegam = Omegab+Omegac
-H0=67.7
+H0=70.0
 n_SA=0.96
 ln10e10ASA=3.085
 z_re=9.9999
@@ -89,7 +89,8 @@ n_y_orig = ymin/cell_size
 n_z_orig = zmin/cell_size
 
 # Reincorporate magnitude to cat_temp
-cat_temp = np.vstack((cat_temp,data_w1_z1['M_I']))
+data_w1_z1['M_B'] = data_w1_z1['M_B']
+cat_temp = np.vstack((cat_temp,data_w1_z1['M_B']))
 
 # Bin the objects in spatial grid
 xmax = cat_temp[0,:].max()
@@ -99,13 +100,13 @@ zmax = cat_temp[2,:].max()
 x_edges = np.arange(xmin,xmax+cell_size,cell_size)
 y_edges = np.arange(ymin,ymax+cell_size,cell_size)
 z_edges = np.arange(zmin,zmax+cell_size,cell_size)
-M_I_edges = np.asarray([data_w1_z1['M_I'].min(),-20.5,data_w1_z1['M_I'].max()])
+M_B_edges = np.asarray([data_w1_z1['M_B'].min(),-20.0,data_w1_z1['M_B'].max()])
 
-bin_edges = np.asarray([x_edges,y_edges,z_edges,M_I_edges])
+bin_edges = np.asarray([x_edges,y_edges,z_edges,M_B_edges])
 
-n_x = len(x_edges)
-n_y = len(y_edges)
-n_z = len(z_edges)
+n_x = len(x_edges)-1
+n_y = len(y_edges)-1
+n_z = len(z_edges)-1
 
 del cat, cat_temp
 # Now let's load the mocks to build
@@ -114,7 +115,7 @@ del cat, cat_temp
 alpha_mocks = np.asarray([])
 theta_mocks = np.asarray([])
 z_mocks = np.asarray([])
-M_I_mocks = np.asarray([])
+M_B_mocks = np.asarray([])
 
 for i in range(153):
 	print("-------------------------------------------------------------------")
@@ -145,7 +146,7 @@ for i in range(153):
 	alpha_mocks = np.append(alpha_mocks,alpha_temp)
 	theta_mocks = np.append(theta_mocks,theta_temp)
 	z_mocks = np.append(z_mocks,mock_temp[:,3])
-	M_I_mocks = np.append(M_I_mocks,mock_temp[:,5])
+	M_B_mocks = np.append(M_B_mocks,mock_temp[:,4])
 
 cat = np.zeros((3,len(alpha_mocks)))
 print("Turning (RA,DEC,z) to (x,y,z)")
@@ -158,13 +159,20 @@ cat_temp = np.einsum('ij,jk',R_z,cat)
 cat_temp = np.einsum('ij,jk',R_y,cat_temp)
 
 # Reincorporate magnitude to cat_temp
-cat_temp = np.vstack((cat_temp,M_I_mocks))
+cat_temp = np.vstack((cat_temp,M_B_mocks+5*np.log10(0.7)))
 
 print("Binning the full amount of mock galaxies")
 grid_cat = np.histogramdd(cat_temp.T, bin_edges )[0]/153
+grid_cat = np.transpose(grid_cat,(3,0,1,2))
 
-print("Saving them to selfunc_22_95_120.hdf5")
-out_name = "selfunc_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)
-out = h5py.File("../../cats/"+out_name+".hdf5",'w')
+print("Computing the mass function\n")
+mf = np.sum(grid_cat,axis=(1,2,3))/(n_x*n_y*n_z*cell_size**3)
+
+print("Saving mass function to mf_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)+".dat")
+np.savetxt("mf_21_94_119.dat",mf)
+
+print("Saving them to selfunc_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)+".hdf5")
+out_name = "selfunc_"+str(n_x)+"_"+str(n_y)+"_"+str(n_z)+"_L0"
+out = h5py.File("../../cats/z1/"+out_name+".hdf5",'w')
 out.create_dataset(out_name,data=grid_cat)
 out.close()
