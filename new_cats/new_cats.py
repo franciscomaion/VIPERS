@@ -60,10 +60,10 @@ print("alpha_mean =",alpha_mean*180/np.pi, ", theta_mean =" ,theta_mean*180/np.p
 R_y = np.asarray( [[np.cos(np.pi/2-theta_mean),0,-np.sin(np.pi/2-theta_mean)],[0,1,0],[np.sin(np.pi/2-theta_mean),0,np.cos(np.pi/2-theta_mean)] ] )
 R_z = np.asarray( [[np.cos(alpha_mean),np.sin(alpha_mean),0],[-np.sin(alpha_mean),np.cos(alpha_mean),0],[0,0,1]] )
 
-r_mean = np.dot(R_z,vec_mean)
+r_mean = np.einsum('ij,j',R_z,vec_mean)
 print("The first rotation produced ", r_mean, "\n")
 
-rr_mean = np.dot(R_y,r_mean)
+rr_mean = np.einsum('ij,j',R_y,r_mean)
 print("The second, and final one produced", rr_mean, "\n")
 
 xmean, ymean, zmean = rr_mean
@@ -138,7 +138,7 @@ for i in range(n_mocks):
 
 	# We have to cut these mocks to be in z_1 redshift slice
 	print("Prior to z cut, we have ", len(mock_temp), " objects \n")
-	mock_temp = mock_temp[np.where( (mock_temp[:,3]>0.55) & (mock_temp[:,3]<0.7) ) ]
+	mock_temp = mock_temp[np.where( (mock_temp[:,3]>=0.55) & (mock_temp[:,3]<=0.7) ) ]
 	print("After z cut we have ", len(mock_temp), " objects \n")
 
 	alpha_temp = mock_temp[:,1]*np.pi/180
@@ -160,6 +160,8 @@ for i in range(n_mocks):
 	# the same regions of space.
 
 	# Reincorporate magnitude to cat_temp
+	# We must sum this factor onto the mocks magnitude to correct for inconsistencies
+	# in the definition of H0 between data and mocks
 	cat_temp = np.vstack((cat_temp,mock_temp[:,4]+5*np.log10(0.7)))
 
 	grid_cat = np.histogramdd(cat_temp.T, bin_edges )[0]
